@@ -33,10 +33,18 @@ CREATE TABLE IF NOT EXISTS users (
     last_hack       REAL    NOT NULL DEFAULT 0,
     last_channel    INTEGER NOT NULL DEFAULT 0,
     last_starve     REAL    NOT NULL DEFAULT 0,
+    registered      INTEGER NOT NULL DEFAULT 0,
+    gender          TEXT,
+    age             INTEGER NOT NULL DEFAULT 0,
+    country         TEXT,
+    skin            TEXT,
     dead            INTEGER NOT NULL DEFAULT 0,
-    last_mine       REAL    NOT NULL DEFAULT 0,
-    poison_until    REAL    NOT NULL DEFAULT 0,
-    last_train      REAL    NOT NULL DEFAULT 0
+    spouse          INTEGER NOT NULL DEFAULT 0,
+    love            INTEGER NOT NULL DEFAULT 0,
+    last_date       REAL    NOT NULL DEFAULT 0,
+    luck_until      REAL    NOT NULL DEFAULT 0,
+    boost_until     REAL    NOT NULL DEFAULT 0,
+    last_mine       REAL    NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS inventory (
     user_id  INTEGER NOT NULL,
@@ -57,44 +65,39 @@ CREATE TABLE IF NOT EXISTS safe_items (
     qty      INTEGER NOT NULL,
     PRIMARY KEY (user_id, item_key)
 );
-CREATE TABLE IF NOT EXISTS shop_stock (
-    item_key TEXT PRIMARY KEY,
-    day      INTEGER NOT NULL,
-    sold     INTEGER NOT NULL
+CREATE TABLE IF NOT EXISTS equipped (
+    user_id  INTEGER NOT NULL,
+    slot     TEXT    NOT NULL,
+    item_key TEXT    NOT NULL,
+    PRIMARY KEY (user_id, slot)
 );
-CREATE TABLE IF NOT EXISTS profiles (
-    user_id     INTEGER PRIMARY KEY,
-    gender      TEXT,
-    age         INTEGER,
-    nationality TEXT,
-    hair        TEXT,
-    outfit      TEXT    NOT NULL DEFAULT '{}',
-    spouse_id   INTEGER,
-    married_at  REAL    NOT NULL DEFAULT 0,
-    love        INTEGER NOT NULL DEFAULT 0,
-    last_date   REAL    NOT NULL DEFAULT 0,
-    created_at  REAL    NOT NULL DEFAULT 0
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS treasury (
-    id     INTEGER PRIMARY KEY CHECK (id = 1),
-    amount INTEGER NOT NULL DEFAULT 0
+CREATE TABLE IF NOT EXISTS admins (
+    user_id INTEGER PRIMARY KEY
 );
-INSERT OR IGNORE INTO treasury (id, amount) VALUES (1, 0);
 CREATE TABLE IF NOT EXISTS giveaways (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id   INTEGER NOT NULL,
+    guild_id   INTEGER NOT NULL DEFAULT 0,
     channel_id INTEGER NOT NULL,
     message_id INTEGER NOT NULL DEFAULT 0,
+    host_id    INTEGER NOT NULL,
     prize      INTEGER NOT NULL,
     winners    INTEGER NOT NULL DEFAULT 1,
     ends_at    REAL    NOT NULL,
-    host_id    INTEGER NOT NULL,
-    done       INTEGER NOT NULL DEFAULT 0
+    status     TEXT    NOT NULL DEFAULT 'active'
 );
 CREATE TABLE IF NOT EXISTS giveaway_entries (
     giveaway_id INTEGER NOT NULL,
     user_id     INTEGER NOT NULL,
     PRIMARY KEY (giveaway_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS shop_stock (
+    item_key TEXT PRIMARY KEY,
+    day      INTEGER NOT NULL,
+    sold     INTEGER NOT NULL
 );
 """
 
@@ -118,15 +121,21 @@ MIGRATIONS = {
     "last_hack": "REAL NOT NULL DEFAULT 0",
     "last_channel": "INTEGER NOT NULL DEFAULT 0",
     "last_starve": "REAL NOT NULL DEFAULT 0",
+    "registered": "INTEGER NOT NULL DEFAULT 0",
+    "gender": "TEXT",
+    "age": "INTEGER NOT NULL DEFAULT 0",
+    "country": "TEXT",
+    "skin": "TEXT",
     "dead": "INTEGER NOT NULL DEFAULT 0",
+    "spouse": "INTEGER NOT NULL DEFAULT 0",
+    "love": "INTEGER NOT NULL DEFAULT 0",
+    "last_date": "REAL NOT NULL DEFAULT 0",
+    "luck_until": "REAL NOT NULL DEFAULT 0",
+    "boost_until": "REAL NOT NULL DEFAULT 0",
     "last_mine": "REAL NOT NULL DEFAULT 0",
-    "poison_until": "REAL NOT NULL DEFAULT 0",
-    "last_train": "REAL NOT NULL DEFAULT 0",
 }
 
-COOLDOWN_COLUMNS = {"last_burglary", "last_rob", "last_hack", "last_mine", "last_train"}
-SETTABLE_COLUMNS = {"last_mine", "last_train", "poison_until", "last_work", "last_workout", "last_daily",
-                    "last_burglary", "last_rob", "last_hack", "jail_until", "protect_until"}
+COOLDOWN_COLUMNS = {"last_burglary", "last_rob", "last_hack", "last_mine", "last_date"}
 TOP_EXPR = {
     "bank": "bank",
     "wallet": "balance",
@@ -769,14 +778,30 @@ class Database:
             )
             await self.conn.commit()
 
-    async def starving_users(self, now: float, hunger_seconds: float, gap: float):
-        """Өлссөн, сүүлийн 'gap' секундэд торгуульд ороогүй хэрэглэгчид."""
+    async def starving_users(self, now: float, hunger_seconds: float, death_seconds: float, gap: float):
+        """Өлссөн (3-7 хоног хоолгүй), амьд, сүүлийн 'gap' секундэд торгуульд ороогүй хэрэглэгчид."""
         cur = await self.conn.execute(
-            "SELECT user_id, last_channel FROM users "
-            "WHERE dead = 0 AND ? - last_fed >= ? AND ? - last_starve >= ?",
-            (now, hunger_seconds, now, gap),
+            "SELECT user_id, last_channel, hunger_notified FROM users "
+            "WHERE registered = 1 AND dead = 0 AND ? - last_fed >= ? AND ? - last_fed < ? "
+            "AND ? - last_starve >= ?",
+            (now, hunger_seconds, now, death_seconds, now, gap),
         )
         return await cur.fetchall()
+
+    async def dying_users(self, now: float, death_seconds: float):
+        cur = await self.conn.execute(
+            "SELECT user_id, last_channel FROM users "
+            "WHERE registered = 1 AND dead = 0 AND ? - last_fed >= ?",
+            (now, death_seconds),
+        )
+        return await cur.fetchall()
+
+    async def mark_notified(self, user_id: int, now: float):
+        async with self.lock:
+            await self.conn.execute(
+                "UPDATE users SET hunger_notified = ? WHERE user_id = ?", (now, user_id)
+            )
+            await self.conn.commit()
 
     async def apply_starvation(self, user_id: int, now: float, rate: float) -> int:
         """Хэтэвчний rate хувийг хасаж, хассан дүнг буцаана."""
@@ -793,165 +818,184 @@ class Database:
             await self.conn.commit()
             return taken
 
-    # ---------- үхэл / сэргээлт ----------
-    async def set_dead(self, user_id: int, dead: bool, now: float | None = None):
+    # ---------- бүртгэл, дүр ----------
+    async def register(self, user_id: int, gender: str, age: int, country: str, skin: str):
+        now = time.time()
+        async with self.lock:
+            await self._ensure(user_id)
+            await self.conn.execute(
+                "UPDATE users SET registered = 1, gender = ?, age = ?, country = ?, skin = ?, "
+                "last_fed = ?, last_starve = ? WHERE user_id = ?",
+                (gender, age, country, skin, now, now, user_id),
+            )
+            await self.conn.commit()
+
+    async def set_dead(self, user_id: int, dead: bool, now: float):
         async with self.lock:
             await self._ensure(user_id)
             if dead:
                 await self.conn.execute("UPDATE users SET dead = 1 WHERE user_id = ?", (user_id,))
             else:
                 await self.conn.execute(
-                    "UPDATE users SET dead = 0, last_fed = ?, last_starve = 0 WHERE user_id = ?",
-                    (now or time.time(), user_id),
+                    "UPDATE users SET dead = 0, last_fed = ?, last_starve = ? WHERE user_id = ?",
+                    (now, now, user_id),
                 )
             await self.conn.commit()
 
-    async def dying_users(self, now: float, dead_seconds: float):
+    async def get_equipped(self, user_id: int) -> dict[str, str]:
         cur = await self.conn.execute(
-            "SELECT user_id, last_channel FROM users WHERE dead = 0 AND ? - last_fed >= ?",
-            (now, dead_seconds),
+            "SELECT slot, item_key FROM equipped WHERE user_id = ?", (user_id,)
         )
-        return await cur.fetchall()
+        return {r["slot"]: r["item_key"] for r in await cur.fetchall()}
 
-    async def set_column(self, user_id: int, column: str, value):
-        if column not in SETTABLE_COLUMNS:
-            raise ValueError(column)
+    async def equip(self, user_id: int, slot: str, item_key: str):
         async with self.lock:
-            await self._ensure(user_id)
-            await self.conn.execute(f"UPDATE users SET {column} = ? WHERE user_id = ?", (value, user_id))
-            await self.conn.commit()
-
-    async def set_strength(self, user_id: int, value: int):
-        async with self.lock:
-            await self._ensure(user_id)
-            await self.conn.execute("UPDATE users SET strength = ? WHERE user_id = ?", (value, user_id))
-            await self.conn.commit()
-
-    async def lose_percent(self, user_id: int, rate: float) -> int:
-        """Хэтэвчний rate хувийг хасна (өрөнд оруулахгүй). Хассан дүнг буцаана."""
-        async with self.lock:
-            await self._ensure(user_id)
-            cur = await self.conn.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,))
-            row = await cur.fetchone()
-            taken = int(max(0, row["balance"]) * rate)
             await self.conn.execute(
-                "UPDATE users SET balance = balance - ? WHERE user_id = ?", (taken, user_id)
+                "INSERT INTO equipped (user_id, slot, item_key) VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id, slot) DO UPDATE SET item_key = excluded.item_key",
+                (user_id, slot, item_key),
             )
             await self.conn.commit()
-            return taken
 
-    # ---------- татварын сан ----------
-    async def treasury_get(self) -> int:
-        cur = await self.conn.execute("SELECT amount FROM treasury WHERE id = 1")
-        row = await cur.fetchone()
-        return row["amount"] if row else 0
-
-    async def treasury_add(self, amount: int):
-        if amount <= 0:
-            return
-        async with self.lock:
-            await self.conn.execute("UPDATE treasury SET amount = amount + ? WHERE id = 1", (amount,))
-            await self.conn.commit()
-
-    async def treasury_take(self, amount: int) -> bool:
+    async def unequip(self, user_id: int, slot: str) -> bool:
         async with self.lock:
             cur = await self.conn.execute(
-                "UPDATE treasury SET amount = amount - ? WHERE id = 1 AND amount >= ?", (amount, amount)
+                "DELETE FROM equipped WHERE user_id = ? AND slot = ?", (user_id, slot)
             )
             await self.conn.commit()
             return cur.rowcount == 1
 
-    # ---------- профайл ----------
-    async def get_profile(self, user_id: int):
-        cur = await self.conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,))
-        return await cur.fetchone()
-
-    async def count_profiles(self) -> int:
-        cur = await self.conn.execute("SELECT COUNT(*) AS n FROM profiles")
-        return (await cur.fetchone())["n"]
-
-    async def save_profile(self, user_id: int, gender: str, age: int, nationality: str, hair: str):
+    # ---------- potion ----------
+    async def set_potion(self, user_id: int, column: str, until: float):
+        assert column in ("luck_until", "boost_until")
         async with self.lock:
+            await self._ensure(user_id)
             await self.conn.execute(
-                "INSERT INTO profiles (user_id, gender, age, nationality, hair, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET "
-                "gender = excluded.gender, age = excluded.age, "
-                "nationality = excluded.nationality, hair = excluded.hair",
-                (user_id, gender, age, nationality, hair, time.time()),
+                f"UPDATE users SET {column} = ? WHERE user_id = ?", (until, user_id)
             )
             await self.conn.commit()
 
-    async def set_outfit(self, user_id: int, outfit_json: str):
+    # ---------- татвар / сан ----------
+    async def get_setting(self, key: str) -> int:
+        cur = await self.conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = await cur.fetchone()
+        return row["value"] if row else 0
+
+    async def add_setting(self, key: str, delta: int):
         async with self.lock:
             await self.conn.execute(
-                "UPDATE profiles SET outfit = ? WHERE user_id = ?", (outfit_json, user_id)
+                "INSERT INTO settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = value + excluded.value",
+                (key, delta),
             )
             await self.conn.commit()
 
-    async def delete_profile(self, user_id: int):
-        async with self.lock:
-            await self.conn.execute(
-                "UPDATE profiles SET spouse_id = NULL, married_at = 0 WHERE spouse_id = ?", (user_id,)
-            )
-            await self.conn.execute("DELETE FROM profiles WHERE user_id = ?", (user_id,))
-            await self.conn.commit()
-
-    async def marry(self, a: int, b: int, now: float) -> bool:
-        async with self.lock:
-            c1 = await self.conn.execute(
-                "UPDATE profiles SET spouse_id = ?, married_at = ? WHERE user_id = ? AND spouse_id IS NULL",
-                (b, now, a),
-            )
-            c2 = await self.conn.execute(
-                "UPDATE profiles SET spouse_id = ?, married_at = ? WHERE user_id = ? AND spouse_id IS NULL",
-                (a, now, b),
-            )
-            if c1.rowcount == 1 and c2.rowcount == 1:
-                await self.conn.commit()
-                return True
-            await self.conn.rollback()
-            return False
-
-    async def divorce(self, user_id: int) -> int | None:
-        async with self.lock:
-            cur = await self.conn.execute("SELECT spouse_id FROM profiles WHERE user_id = ?", (user_id,))
-            row = await cur.fetchone()
-            if not row or row["spouse_id"] is None:
-                return None
-            spouse = row["spouse_id"]
-            await self.conn.execute(
-                "UPDATE profiles SET spouse_id = NULL, married_at = 0 WHERE user_id IN (?, ?)",
-                (user_id, spouse),
-            )
-            await self.conn.commit()
-            return spouse
-
-    async def do_date(self, a: int, b: int, now: float, cooldown: float, love: int) -> bool:
+    async def take_pool(self, amount: int) -> bool:
+        """Татварын сангаас мөнгө хасна (хүрэлцэхгүй бол False)."""
         async with self.lock:
             cur = await self.conn.execute(
-                "UPDATE profiles SET love = love + ?, last_date = ? "
-                "WHERE user_id IN (?, ?) AND ? - last_date >= ?",
-                (love, now, a, b, now, cooldown),
+                "UPDATE settings SET value = value - ? WHERE key = 'pool' AND value >= ?",
+                (amount, amount),
             )
-            if cur.rowcount == 2:
+            await self.conn.commit()
+            return cur.rowcount == 1
+
+    # ---------- админ ----------
+    async def is_admin(self, user_id: int) -> bool:
+        cur = await self.conn.execute("SELECT 1 FROM admins WHERE user_id = ?", (user_id,))
+        return await cur.fetchone() is not None
+
+    async def add_admin(self, user_id: int):
+        async with self.lock:
+            await self.conn.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (user_id,))
+            await self.conn.commit()
+
+    async def remove_admin(self, user_id: int) -> bool:
+        async with self.lock:
+            cur = await self.conn.execute("DELETE FROM admins WHERE user_id = ?", (user_id,))
+            await self.conn.commit()
+            return cur.rowcount == 1
+
+    async def list_admins(self) -> list[int]:
+        cur = await self.conn.execute("SELECT user_id FROM admins")
+        return [r["user_id"] for r in await cur.fetchall()]
+
+    async def confiscate(self, user_id: int, amount: int) -> int:
+        """Хэтэвчнээс, дутвал банкнаас мөнгө хураана. Хураасан дүнг буцаана (сан руу орно)."""
+        async with self.lock:
+            await self._ensure(user_id)
+            cur = await self.conn.execute(
+                "SELECT balance, bank FROM users WHERE user_id = ?", (user_id,)
+            )
+            row = await cur.fetchone()
+            from_wallet = min(row["balance"], amount)
+            from_bank = min(row["bank"], amount - from_wallet)
+            total = from_wallet + from_bank
+            await self.conn.execute(
+                "UPDATE users SET balance = balance - ?, bank = bank - ? WHERE user_id = ?",
+                (from_wallet, from_bank, user_id),
+            )
+            if total:
+                await self.conn.execute(
+                    "INSERT INTO settings (key, value) VALUES ('pool', ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = value + excluded.value",
+                    (total,),
+                )
+            await self.conn.commit()
+            return total
+
+    async def set_jail_raw(self, user_id: int, until: float, bail: int = 0):
+        await self.jail(user_id, until, bail)
+
+    async def reset_user(self, user_id: int):
+        async with self.lock:
+            for table in ("inventory", "house_items", "safe_items", "equipped"):
+                await self.conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+            await self.conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+            await self.conn.commit()
+
+    # ---------- романс ----------
+    async def marry(self, a: int, b: int) -> bool:
+        async with self.lock:
+            await self._ensure(a)
+            await self._ensure(b)
+            cur = await self.conn.execute(
+                "SELECT COUNT(*) AS c FROM users WHERE user_id IN (?, ?) AND spouse = 0", (a, b)
+            )
+            if (await cur.fetchone())["c"] != 2:
+                return False
+            await self.conn.execute("UPDATE users SET spouse = ?, love = 0 WHERE user_id = ?", (b, a))
+            await self.conn.execute("UPDATE users SET spouse = ?, love = 0 WHERE user_id = ?", (a, b))
+            await self.conn.commit()
+            return True
+
+    async def divorce(self, user_id: int) -> int:
+        """Салсан хүний ID-г буцаана (0 бол гэрлээгүй)."""
+        async with self.lock:
+            cur = await self.conn.execute("SELECT spouse FROM users WHERE user_id = ?", (user_id,))
+            row = await cur.fetchone()
+            other = row["spouse"] if row else 0
+            if other:
+                await self.conn.execute(
+                    "UPDATE users SET spouse = 0, love = 0 WHERE user_id IN (?, ?)", (user_id, other)
+                )
                 await self.conn.commit()
-                return True
-            await self.conn.rollback()
-            return False
+            return other
+
+    async def add_love(self, a: int, b: int, amount: int):
+        async with self.lock:
+            await self.conn.execute(
+                "UPDATE users SET love = love + ? WHERE user_id IN (?, ?)", (amount, a, b)
+            )
+            await self.conn.commit()
 
     # ---------- giveaway ----------
-    async def create_giveaway(self, guild_id, channel_id, prize, winners, ends_at, host_id) -> int | None:
+    async def create_giveaway(self, guild_id, channel_id, host_id, prize, winners, ends_at) -> int:
         async with self.lock:
             cur = await self.conn.execute(
-                "UPDATE treasury SET amount = amount - ? WHERE id = 1 AND amount >= ?", (prize, prize)
-            )
-            if cur.rowcount != 1:
-                await self.conn.rollback()
-                return None
-            cur = await self.conn.execute(
-                "INSERT INTO giveaways (guild_id, channel_id, prize, winners, ends_at, host_id) "
+                "INSERT INTO giveaways (guild_id, channel_id, host_id, prize, winners, ends_at) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                (guild_id, channel_id, prize, winners, ends_at, host_id),
+                (guild_id, channel_id, host_id, prize, winners, ends_at),
             )
             await self.conn.commit()
             return cur.lastrowid
@@ -961,30 +1005,50 @@ class Database:
             await self.conn.execute("UPDATE giveaways SET message_id = ? WHERE id = ?", (message_id, gid))
             await self.conn.commit()
 
-    async def giveaway_by_message(self, message_id: int):
-        cur = await self.conn.execute(
-            "SELECT * FROM giveaways WHERE message_id = ? AND done = 0", (message_id,)
-        )
+    async def get_giveaway(self, gid: int):
+        cur = await self.conn.execute("SELECT * FROM giveaways WHERE id = ?", (gid,))
         return await cur.fetchone()
 
-    async def due_giveaways(self, now: float):
-        cur = await self.conn.execute("SELECT * FROM giveaways WHERE done = 0 AND ends_at <= ?", (now,))
+    async def active_giveaways(self):
+        cur = await self.conn.execute("SELECT * FROM giveaways WHERE status = 'active'")
         return await cur.fetchall()
 
     async def enter_giveaway(self, gid: int, user_id: int) -> bool:
         async with self.lock:
             cur = await self.conn.execute(
-                "INSERT OR IGNORE INTO giveaway_entries (giveaway_id, user_id) VALUES (?, ?)", (gid, user_id)
+                "INSERT OR IGNORE INTO giveaway_entries (giveaway_id, user_id) VALUES (?, ?)",
+                (gid, user_id),
             )
             await self.conn.commit()
             return cur.rowcount == 1
 
     async def giveaway_entries(self, gid: int) -> list[int]:
-        cur = await self.conn.execute("SELECT user_id FROM giveaway_entries WHERE giveaway_id = ?", (gid,))
+        cur = await self.conn.execute(
+            "SELECT user_id FROM giveaway_entries WHERE giveaway_id = ?", (gid,)
+        )
         return [r["user_id"] for r in await cur.fetchall()]
 
-    async def finish_giveaway(self, gid: int) -> bool:
+    async def close_giveaway(self, gid: int) -> bool:
         async with self.lock:
-            cur = await self.conn.execute("UPDATE giveaways SET done = 1 WHERE id = ? AND done = 0", (gid,))
+            cur = await self.conn.execute(
+                "UPDATE giveaways SET status = 'ended' WHERE id = ? AND status = 'active'", (gid,)
+            )
             await self.conn.commit()
             return cur.rowcount == 1
+
+    # ---------- статистик ----------
+    async def stats(self) -> dict:
+        cur = await self.conn.execute(
+            "SELECT COUNT(*) AS players, "
+            "COALESCE(SUM(balance + bank + safe_money), 0) AS money, "
+            "COALESCE(SUM(CASE WHEN dead = 1 THEN 1 ELSE 0 END), 0) AS dead, "
+            "COALESCE(SUM(CASE WHEN spouse > 0 THEN 1 ELSE 0 END), 0) AS married, "
+            "COALESCE(SUM(CASE WHEN jail_until > ? THEN 1 ELSE 0 END), 0) AS jailed "
+            "FROM users WHERE registered = 1",
+            (time.time(),),
+        )
+        row = await cur.fetchone()
+        out = dict(row)
+        out["married"] //= 2
+        out["pool"] = await self.get_setting("pool")
+        return out

@@ -1,11 +1,11 @@
 import random
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 SELL_RATE = 0.7  # дэлгүүрт буцааж зарахад үнийн 70%
 
 KIND_EMOJI = {"house": "🏠", "food": "🍽️", "jewel": "💎", "metal": "⛏️", "tool": "🛡️",
-              "clothes": "👕", "car": "🚗", "love": "💞", "box": "🎁"}
+              "digital": "📱", "clothes": "👕", "car": "🚗", "realty": "🏘️", "box": "🎁"}
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,9 @@ class Item:
     stars: int = 0  # хоол: 1-5 од
     feeds_days: float = 0.0  # хоол: хэдэн хоногийн хоол
     strength: int = 0  # хоол: нэмэх хүч
-    buyable: bool = True  # qbuy-аар авч болох эсэх
+    slot: str = ""  # хувцас: hat | top | bottom | shoes | acc
+    color: str = ""  # хувцас: зурагт ашиглах өнгө (hex)
+    bonus: float = 0.0  # машин: ажлын цалингийн нэмэгдэл (0.05 = 5%)
 
     @property
     def sell_price(self) -> int:
@@ -112,7 +114,7 @@ _HOUSE_RAW = [
     ("Салфетка", "Napkin", 1_000),
     ("Сав таваг угаагч", "Dish soap", 3_500),
     ("Порлон", "Sponge", 1_200),
-    ("Хайрцаг", "Box", 4_000),
+    ("Картон хайрцаг", "Cardboard box", 4_000),
     ("Тэвш", "Tray", 15_000),
     ("Бортого", "Jar", 6_000),
     ("Лоонх", "Bottle", 3_000),
@@ -160,9 +162,23 @@ _EMOJI = {
     "broom": "🧹", "needle": "🪡", "paint": "🎨", "gift_box": "🎁",
 }
 
+_DIGITAL_MOVED = {"TV", "Computer", "Phone", "Headphones", "Speaker", "Charger", "Battery", "Calculator"}
+
 HOUSE_ITEMS: list[Item] = []
+DIGITAL: list[Item] = []
 for _mn, _en, _price in _HOUSE_RAW:
     _k = _slug(_en)
+    if _en in _DIGITAL_MOVED:
+        DIGITAL.append(
+            Item(
+                _k, _mn, _en, _price, "digital",
+                emoji=_EMOJI.get(_k, "📱"),
+                desc="Дижитал бараа" + (" · байшинд байрлуулна" if _en in _PLACEABLE else ""),
+                stock=5 if _price >= 400_000 else None,
+                placeable=_en in _PLACEABLE,
+            )
+        )
+        continue
     HOUSE_ITEMS.append(
         Item(
             _k, _mn, _en, _price, "house",
@@ -172,6 +188,17 @@ for _mn, _en, _price in _HOUSE_RAW:
             placeable=_en in _PLACEABLE,
         )
     )
+
+DIGITAL += [
+    Item("laptop", "Зөөврийн компьютер", "Laptop", 900_000, "digital", "💻", "Дижитал бараа · байшинд байрлуулна", 5, True),
+    Item("tablet", "Таблет", "Tablet", 500_000, "digital", "📲", "Дижитал бараа", 5),
+    Item("smartwatch", "Ухаалаг цаг", "Smartwatch", 350_000, "digital", "⌚", "Дижитал бараа"),
+    Item("camera", "Камер", "Camera", 700_000, "digital", "📷", "Дижитал бараа", 5),
+    Item("console", "Тоглоомын консол", "Game console", 800_000, "digital", "🎮", "Дижитал бараа · байшинд байрлуулна", 5, True),
+    Item("drone", "Дрон", "Drone", 1_200_000, "digital", "🛸", "Дижитал бараа", 3),
+    Item("router", "Роутер", "Router", 60_000, "digital", "📶", "Дижитал бараа"),
+]
+DIGITAL.sort(key=lambda i: i.price)
 
 # ---------- үнэт эдлэл ----------
 JEWELS: list[Item] = [
@@ -220,109 +247,102 @@ FOODS: list[Item] = [
     for (k, mn, en, price, stars, days, strength, emoji) in _FOODS_RAW
 ]
 
+
+# ---------- брэнд хувцас (үнээр эрэмбэлсэн) ----------
+# (ID, нэр, англи, үнэ, slot, өнгө, emoji)
+_CLOTHES_RAW = [
+    ("zara_tee", "Zara футболк", "Zara T-shirt", 35_000, "top", "#e5e7eb", "👕"),
+    ("hm_hoodie", "H&M цамц", "H&M Hoodie", 60_000, "top", "#6b7280", "🧥"),
+    ("levis_jeans", "Levi's жийнс", "Levi's Jeans", 90_000, "bottom", "#2563eb", "👖"),
+    ("nike_cap", "Nike малгай", "Nike Cap", 80_000, "hat", "#111827", "🧢"),
+    ("adidas_pants", "Adidas өмд", "Adidas Pants", 120_000, "bottom", "#111827", "👖"),
+    ("puma_tee", "Puma футболк", "Puma T-shirt", 130_000, "top", "#dc2626", "👕"),
+    ("converse", "Converse гутал", "Converse", 150_000, "shoes", "#f9fafb", "👟"),
+    ("nike_air", "Nike Air гутал", "Nike Air", 280_000, "shoes", "#ef4444", "👟"),
+    ("deel", "Монгол дээл", "Mongol Deel", 300_000, "top", "#1d4ed8", "🥋"),
+    ("mongol_hat", "Монгол малгай", "Mongol Hat", 250_000, "hat", "#b91c1c", "🎩"),
+    ("mongol_boots", "Монгол гутал", "Mongol Boots", 350_000, "shoes", "#7c2d12", "🥾"),
+    ("adidas_jacket", "Adidas хүрэм", "Adidas Jacket", 400_000, "top", "#0f172a", "🧥"),
+    ("north_face", "North Face пуховик", "North Face Jacket", 650_000, "top", "#f59e0b", "🧥"),
+    ("supreme_hoodie", "Supreme цамц", "Supreme Hoodie", 900_000, "top", "#b91c1c", "🧥"),
+    ("ray_ban", "Ray-Ban шил", "Ray-Ban", 700_000, "acc", "#111827", "🕶️"),
+    ("gucci_belt", "Gucci бүс", "Gucci Belt", 1_100_000, "acc", "#16a34a", "🪢"),
+    ("lv_bag", "Louis Vuitton цүнх", "Louis Vuitton Bag", 2_500_000, "acc", "#92400e", "👜"),
+    ("balenciaga", "Balenciaga гутал", "Balenciaga Sneakers", 1_600_000, "shoes", "#e5e7eb", "👟"),
+    ("gucci_suit", "Gucci костюм", "Gucci Suit", 3_500_000, "top", "#1f2937", "🤵"),
+    ("dior_dress", "Dior даашинз", "Dior Dress", 4_500_000, "top", "#be185d", "👗"),
+    ("armani_pants", "Armani өмд", "Armani Pants", 1_900_000, "bottom", "#1f2937", "👖"),
+    ("hermes_hat", "Hermès малгай", "Hermes Hat", 2_000_000, "hat", "#ea580c", "🎩"),
+    ("prada_shoes", "Prada гутал", "Prada Shoes", 2_800_000, "shoes", "#0f172a", "👞"),
+]
+CLOTHES: list[Item] = [
+    Item(k, mn, en, price, "clothes", emoji, f"Брэнд хувцас · {sl}", 5 if price >= 1_500_000 else None,
+         slot=sl, color=col)
+    for (k, mn, en, price, sl, col, emoji) in _CLOTHES_RAW
+]
+CLOTHES.sort(key=lambda i: i.price)
+SLOT_NAMES = {"hat": "Толгойн хувцас", "top": "Дээд хувцас", "bottom": "Доод хувцас",
+              "shoes": "Гутал", "acc": "Гоёл чимэглэл"}
+
+# ---------- машин ----------
+CARS: list[Item] = [
+    Item("prius", "Toyota Prius", "Toyota Prius", 1_200_000, "car", "🚗", "Ажлын цалин +2%", stock=5, bonus=0.02),
+    Item("landcruiser", "Land Cruiser", "Land Cruiser", 3_500_000, "car", "🚙", "Ажлын цалин +4%", stock=4, bonus=0.04),
+    Item("lexus", "Lexus LX", "Lexus LX", 6_000_000, "car", "🚙", "Ажлын цалин +5%", stock=3, bonus=0.05),
+    Item("bmw", "BMW M5", "BMW M5", 9_000_000, "car", "🏎️", "Ажлын цалин +6%", stock=3, bonus=0.06),
+    Item("g63", "Mercedes G63", "Mercedes G63", 14_000_000, "car", "🚙", "Ажлын цалин +8%", stock=2, bonus=0.08),
+    Item("lambo", "Lamborghini", "Lamborghini", 25_000_000, "car", "🏎️", "Ажлын цалин +10%", stock=1, bonus=0.10),
+]
+
+# ---------- байшин (дэлгүүрт харагдах мөр; авахад qhouse buy-тай ижил) ----------
+from houses import HOUSES as _HOUSES  # noqa: E402
+
+REALTY: list[Item] = [
+    Item(h.key, h.name, h.name, h.price, "realty", h.emoji,
+         f"{h.rooms} өрөө · өрөө бүрт {h.slots} эд зүйл")
+    for h in _HOUSES
+]
+
+# ---------- хайрцаг ----------
+BOXES: list[Item] = [
+    Item("box", "Хайрцаг (Box)", "Box", 50_000, "box", "📦", "Санамсаргүй бараа · 2% Revive Active"),
+    Item("case", "Big Cash Case", "Case", 100_000, "box", "💼", "Мөнгө хожих кейс · хоосон ч гарч болно"),
+    Item("chest", "Сан (Chest)", "Chest", 250_000, "box", "🧰", "Металл, үнэт эдлэл гарна"),
+]
+
 # ---------- хэрэгсэл ----------
 TOOLS: list[Item] = [
     Item("shield", "Хамгаалалтын бамбай", "Shield", 120_000, "tool", "🛡️",
          "2.5 цаг дээрэм, хакердалтаас хамгаална · qblock"),
+    Item("luck_potion", "Азын сав (Luck Poison)", "Luck potion", 80_000, "tool", "🍀",
+         "1 цаг азын магадлал +10%"),
+    Item("money_potion", "Мөнгөний сав (Money Poison)", "Money potion", 100_000, "tool", "💰",
+         "1 цаг ажил, өдрийн цалин +10%"),
 ]
-
-# ---------- хэрэгслийн нэмэлт: Revive Active ба хайрцгууд (дэлгүүрт зарагдахгүй) ----------
-TOOLS.append(
-    Item("revive", "Revive Active", "Revive Active", 5_000_000, "tool", "💖",
-         "Үхсэн хүнийг амилуулна · qinv use revive", buyable=False)
-)
-BOXES: list[Item] = [
-    Item("mbox", "Box", "Box", 50_000, "box", "📦", "Энгийн хайрцаг · qopen box", buyable=False),
-    Item("mcase", "Case", "Case", 150_000, "box", "💼", "Big Cash кейс · qopen case", buyable=False),
-    Item("mchest", "Chest", "Chest", 400_000, "box", "🧰", "Эд зүйлсийн авдар · qopen chest", buyable=False),
-]
-BOX_ALIASES = {"box": "mbox", "case": "mcase", "chest": "mchest",
-               "mbox": "mbox", "mcase": "mcase", "mchest": "mchest"}
-
-# ---------- хайр сэтгэл, хосын эд зүйлс ----------
-LOVE_ITEMS: list[Item] = [
-    Item("rose", "Сарнай", "Rose", 15_000, "love", "🌹", "Хайртай хүндээ бэлэглэ · qgift rose @хүн"),
-    Item("chocolate", "Шоколад", "Chocolate", 20_000, "love", "🍫", "Амттай бэлэг · qgift chocolate @хүн"),
-    Item("love_letter", "Хайрын захидал", "Love letter", 5_000, "love", "💌", "Сэтгэлээ илэр"),
-    Item("teddy", "Хонгор баавгай", "Teddy bear", 60_000, "love", "🧸", "Хайртай хүндээ бэлэглэ"),
-    Item("couple_cups", "Хосын аяга", "Couple cups", 40_000, "love", "☕", "Хосын хоёр аяга"),
-    Item("bouquet", "Баглаа цэцэг", "Bouquet", 90_000, "love", "💐", "Гоё баглаа цэцэг"),
-]
-
-# ---------- дижитал ----------
-_DIGITAL_EN = {"TV", "Computer", "Phone", "Charger", "Headphones", "Speaker", "Calculator"}
-_DIGITAL_NEW: list[Item] = [
-    Item("laptop", "Зөөврийн компьютер", "Laptop", 900_000, "house", "💻", "Дижитал · зөөврийн компьютер", stock=5),
-    Item("tablet", "Таблет", "Tablet", 500_000, "house", "📲", "Дижитал · таблет", stock=5),
-    Item("console", "Тоглоомын консол", "Game console", 700_000, "house", "🎮", "Дижитал · тоглоомын консол", stock=5),
-    Item("camera", "Камер", "Camera", 350_000, "house", "📷", "Дижитал · зургийн аппарат", stock=5),
-    Item("smartwatch", "Ухаалаг цаг", "Smart watch", 250_000, "house", "⌚", "Дижитал · ухаалаг цаг", stock=5),
-    Item("drone", "Дрон", "Drone", 1_200_000, "house", "🚁", "Дижитал · дрон", stock=3),
-]
-
-# ---------- хувцас: key -> (байрлал, өнгө) ----------
-CLOTHES_STYLE: dict[str, tuple[str, str]] = {
-    "tshirt": ("top", "#ef4444"), "hoodie": ("top", "#6366f1"), "jacket": ("top", "#374151"),
-    "suit": ("full", "#111827"), "deel": ("full", "#0ea5e9"), "dress": ("full", "#ec4899"),
-    "jeans": ("bottom", "#1d4ed8"), "shorts": ("bottom", "#f59e0b"),
-    "sneakers": ("shoes", "#f3f4f6"), "boots": ("shoes", "#78350f"), "mongol_boots": ("shoes", "#b91c1c"),
-    "hat": ("hat", "#92400e"), "sunglasses": ("face", "#111827"), "scarf": ("neck", "#f97316"),
-    # дэлгүүрт байсан хуучин хувцаснууд
-    "clothes": ("top", "#10b981"), "shoes": ("shoes", "#4b5563"), "cap": ("hat", "#2563eb"),
-    "glasses": ("face", "#1f2937"),
-}
-_CLOTHES_NEW: list[Item] = [
-    Item("tshirt", "Футболк", "T-shirt", 60_000, "clothes", "👕", "Дээр өмсөх · qwear tshirt"),
-    Item("hoodie", "Ходи", "Hoodie", 150_000, "clothes", "🧥", "Дээр өмсөх · qwear hoodie"),
-    Item("jacket", "Куртик", "Jacket", 280_000, "clothes", "🧥", "Дээр өмсөх · qwear jacket"),
-    Item("suit", "Костюм", "Suit", 700_000, "clothes", "🤵", "Бүтэн хувцас · qwear suit"),
-    Item("deel", "Монгол дээл", "Deel", 900_000, "clothes", "🥋", "Үндэсний бүтэн хувцас · qwear deel"),
-    Item("dress", "Даашинз", "Dress", 450_000, "clothes", "👗", "Бүтэн хувцас · qwear dress"),
-    Item("jeans", "Жинсэн өмд", "Jeans", 120_000, "clothes", "👖", "Доор өмсөх · qwear jeans"),
-    Item("shorts", "Богино өмд", "Shorts", 50_000, "clothes", "🩳", "Доор өмсөх · qwear shorts"),
-    Item("sneakers", "Пүүз", "Sneakers", 180_000, "clothes", "👟", "Гутал · qwear sneakers"),
-    Item("boots", "Гутал (өвлийн)", "Boots", 220_000, "clothes", "🥾", "Гутал · qwear boots"),
-    Item("mongol_boots", "Монгол гутал", "Mongol boots", 350_000, "clothes", "👢", "Үндэсний гутал · qwear mongol_boots"),
-    Item("hat", "Малгай", "Hat", 70_000, "clothes", "🎩", "Толгойн хувцас · qwear hat"),
-    Item("sunglasses", "Нарны шил", "Sunglasses", 90_000, "clothes", "🕶️", "Нүүрний аксессуар · qwear sunglasses"),
-    Item("scarf", "Ороолт", "Scarf", 40_000, "clothes", "🧣", "Хүзүүний аксессуар · qwear scarf"),
-]
-_WEAR_EN = {"Clothes", "Shoes", "Socks", "Cap", "Gloves", "Belt", "Glasses", "Mask", "Wristwatch", "Bag"}
-
-_OLD_HOUSE = HOUSE_ITEMS
-DIGITAL: list[Item] = [i for i in _OLD_HOUSE if i.en in _DIGITAL_EN] + _DIGITAL_NEW
-_WEAR_OLD: list[Item] = [i for i in _OLD_HOUSE if i.en in _WEAR_EN]
-HOME: list[Item] = [i for i in _OLD_HOUSE if i.en not in _DIGITAL_EN and i.en not in _WEAR_EN] + LOVE_ITEMS
-CLOTHES: list[Item] = _CLOTHES_NEW + _WEAR_OLD + JEWELS
-
-# ---------- машин ----------
-CARS: list[Item] = [
-    Item("bicycle", "Дугуй", "Bicycle", 300_000, "car", "🚲", "Хамгийн хямд унаа"),
-    Item("moped", "Мопед", "Moped", 2_500_000, "car", "🛵", "Хотоор давхих"),
-    Item("old_prius", "Хуучин Приус", "Old Prius", 12_000_000, "car", "🚗", "Улаанбаатарын хамгийн алдартай машин", stock=5),
-    Item("land_cruiser", "Ландкрузер", "Land Cruiser", 60_000_000, "car", "🚙", "Баялгийн тэмдэг", stock=3),
-    Item("sports_car", "Спорт машин", "Sports car", 150_000_000, "car", "🏎️", "Хамгийн хурдан, хамгийн үнэтэй", stock=2),
+# дэлгүүрт зарагдахгүй, зөвхөн тоглоомоор / админаас олдоно
+SPECIAL: list[Item] = [
+    Item("revive", "Revive Active", "Revive Active", 2_000_000, "tool", "💖",
+         "Үхсэн дүрийг амилуулна · qinv use revive"),
+    Item("gold_ore", "Алтан хүдэр", "Gold ore", 40_000, "metal", "🪨", "Малтаж олсон алтан хүдэр"),
 ]
 
 ALL_ITEMS: list[Item] = (
-    HOUSE_ITEMS + _DIGITAL_NEW + _CLOTHES_NEW + LOVE_ITEMS + CARS
-    + JEWELS + METALS + FOODS + TOOLS + BOXES
+    HOUSE_ITEMS + DIGITAL + JEWELS + METALS + FOODS + CLOTHES + CARS + REALTY + BOXES + TOOLS + SPECIAL
 )
 ITEMS: dict[str, Item] = {it.key: it for it in ALL_ITEMS}
 assert len(ITEMS) == len(ALL_ITEMS), "Барааны ID давхардсан байна"
 
-# металл дэлгүүрт зарагдахгүй: уурхайгаас (qmine) эсвэл хулгайгаар олдоно
-METALS = [replace(m, buyable=False) for m in METALS]
-ALL_ITEMS = [replace(i, buyable=False) if i.kind == "metal" else i for i in ALL_ITEMS]
-ITEMS = {it.key: it for it in ALL_ITEMS}
-
-# Дэлгүүрийн 5 ангилал: (түлхүүр, emoji, нэр, бараанууд)
+# Дэлгүүрийн ангилал: (түлхүүр, emoji, нэр, бараанууд)
 CATEGORIES = [
     ("food", "🍞", "Хүнс", FOODS),
     ("digital", "📱", "Дижитал", DIGITAL),
-    ("home", "🪑", "Гэр ахуй", HOME),
-    ("house", "🏠", "Байшин, машин", CARS + [t for t in TOOLS if t.buyable]),
-    ("clothes", "👕", "Хувцас", CLOTHES),
+    ("home", "🏠", "Гэр ахуй", HOUSE_ITEMS),
+    ("house", "🏘️", "Байшин, машин", sorted(REALTY + CARS, key=lambda i: i.price)),
+    ("clothes", "👕", "Брэнд хувцас", CLOTHES),
+    ("jewel", "💎", "Үнэт эдлэл", JEWELS),
+    ("metal", "⛏️", "Металл", METALS),
+    ("box", "🎁", "Хайрцаг, кейс", BOXES),
+    ("tool", "🛡️", "Хэрэгсэл", TOOLS),
 ]
 CATEGORY_BY_KEY = {c[0]: c for c in CATEGORIES}
 
@@ -354,7 +374,8 @@ def stars(n: int) -> str:
     return "⭐" * n
 
 
-_HOUSE_W = [1 / (it.price ** 0.5) for it in HOUSE_ITEMS]
+LOOT_POOL = HOUSE_ITEMS + DIGITAL
+_HOUSE_W = [1 / (it.price ** 0.5) for it in LOOT_POOL]
 _RARE = JEWELS + METALS
 _RARE_W = [1 / it.price for it in _RARE]
 
@@ -366,7 +387,7 @@ def random_loot(n: int, rare_chance: float = 0.0) -> list[Item]:
         if rare_chance and random.random() < rare_chance:
             out.append(random.choices(_RARE, weights=_RARE_W)[0])
         else:
-            out.append(random.choices(HOUSE_ITEMS, weights=_HOUSE_W)[0])
+            out.append(random.choices(LOOT_POOL, weights=_HOUSE_W)[0])
     return out
 
 

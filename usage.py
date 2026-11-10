@@ -12,11 +12,10 @@ USAGE = {
     "with": ("📤", "Банкны данснаас хэтэвч рүү мөнгө авах (шимтгэл 200₮).", "{p}with [дүн | all]", "{p}with 75k"),
     "lb": ("🏆", "Серверийн хамгийн баян хэрэглэгчдийн жагсаалт.", "{p}lb [bank | wallet | total]", "{p}lb total"),
     "setmoney": ("💵", "Bot Owner: хэрэглэгчийн хэтэвчийн мөнгийг тохируулах.", "{p}setmoney <@хэрэглэгч> <дүн>", "{p}setmoney @Bat 1m"),
-    "addmoney": ("🛠️", "Bot Owner: хэрэглэгчид мөнгө нэмэх.", "{p}addmoney <@хэрэглэгч> <дүн>", "{p}addmoney @Bat 1m"),
     "work": ("💼", "Санамсаргүй ажил хийж цалин авах (1 цаг тутам).", "{p}work", "{p}work"),
     "jobs": ("📋", "Ажлын жагсаалт.", "{p}jobs", "{p}jobs"),
     "workout": ("🏋️", "Дасгал хийж хүч нэмэх. Хүч нэмэгдэх тусам ажлын орлого өснө (2 цаг тутам).", "{p}workout", "{p}workout"),
-    "shop": ("🛍️", "Дэлгүүр. Ангилал, хуудсаар үзнэ.", "{p}shop [food | house | jewel | metal | tool]", "{p}shop jewel"),
+    "shop": ("🛍️", "Дэлгүүр. Ангилал, хуудсаар үзнэ.", "{p}shop [food | digital | home | house | clothes | jewel | metal | box | tool]", "{p}shop jewel"),
     "buy": ("🛒", "Дэлгүүрээс бараа худалдаж авна.", "{p}buy <ID> [тоо]", "{p}buy bread 3"),
     "inv": ("🎒", "Цүнхээ харах, ашиглах.", "{p}inv [use <ID> [тоо]]", "{p}inv use shield"),
     "sell": ("💰", "Цүнхний барааг дэлгүүрт 70%-ийн үнээр зарна. `all` бол бүгдийг.", "{p}sell <ID | all> [тоо]", "{p}sell chair 2"),
@@ -37,27 +36,23 @@ USAGE = {
     "mf": ("💣", "Minefield: аюулгүй талбай нээгээд бөмбөгөөс зайлаарай.", "{p}mf <дүн>", "{p}mf 30k"),
     "duel": ("⚔️", "Эсрэг тоглогчтой 3 раунд чулуу-хайч-даавуу дуэль.", "{p}duel <@хэрэглэгч> <дүн>", "{p}duel @Bat 50k"),
     "draw": ("🔫", "Quick Draw: GO! гарахад хамгийн хурдан буудсан хүн ялна.", "{p}draw <@хэрэглэгч> <дүн>", "{p}draw @Bat 50k"),
-    "help": ("📖", "Командын тусламж.", "{p}help", "{p}help"),
-    "profile": ("👤", "Character профайл харах. Анх удаа бол асуултууд эхэлнэ.", "{p}profile [@хэрэглэгч]", "{p}profile @Bat"),
-    "wear": ("👕", "Хувцас өмсөх (цүнхэнд байх ёстой). `off` бол бүгдийг тайлна.", "{p}wear <ID | off>", "{p}wear hoodie"),
-    "marry": ("💍", "Гэрлэх санал тавина (Бөгж хэрэгтэй).", "{p}marry <@хэрэглэгч>", "{p}marry @Bat"),
-    "divorce": ("💔", "Гэрлэлтээ цуцлах.", "{p}divorce", "{p}divorce"),
-    "date": ("💞", "Хосоороо болзож хайрын оноо авах (6 цаг тутам).", "{p}date", "{p}date"),
-    "box": ("🎁", "Хайрцгийн дэлгүүр. Box / Case / Chest.", "{p}box [buy <box|case|chest> [тоо]]", "{p}box buy case 2"),
-    "open": ("🎁", "Хайрцаг, кейс, авдар нээх.", "{p}open <box|case|chest> [тоо]", "{p}open box 3"),
-    "mine": ("⛏️", "Алт ухах (40% олдоно, 1.5 цаг тутам).", "{p}mine", "{p}mine"),
-    "coach": ("🏋️", "Хувийн дасгалжуулагчид мөнгө төлж хүч нэмэх.", "{p}coach", "{p}coach"),
-    "treasury": ("🏛️", "Татварын сангийн үлдэгдэл.", "{p}treasury", "{p}treasury"),
-    "giveaway": ("🎉", "Owner/Admin: татварын сангаас giveaway.", "{p}giveaway <дүн|all> <30m|2h|1d> [ялагчийн тоо]", "{p}giveaway 500k 1h 2"),
-    "phone": ("📱", "Утас: банк, эрүүл мэнд, татвар, сервер апп.", "{p}phone", "{p}phone"),
-    "info": ("📡", "Серверийн мэдээлэл.", "{p}info", "{p}info"),
-    "ping": ("🏓", "Ботын ping.", "{p}ping", "{p}ping"),
-    "admin": ("🛠️", "Owner/Admin: слайдтай тайлбар. Дэлгэрэнгүй: `{p}admin`.", "{p}admin", "{p}admin"),
-    "admin give": ("💰", "Admin: мөнгө өгөх.", "{p}admin give <@хүн> <дүн>", "{p}admin give @Bat 1m"),
-    "admin take": ("💸", "Admin: мөнгө хасах.", "{p}admin take <@хүн> <дүн>", "{p}admin take @Bat 100k"),
-    "admin set": ("💵", "Admin: хэтэвч тохируулах.", "{p}admin set <@хүн> <дүн>", "{p}admin set @Bat 0"),
-    "admin jail": ("⛓️", "Admin: шоронд хийх.", "{p}admin jail <@хүн> [минут]", "{p}admin jail @Bat 30"),
-    "admin treasury": ("🏛️", "Admin: татварын сан.", "{p}admin treasury <add|take> <дүн>", "{p}admin treasury add 1m"),
+    "register": ("📝", "Дүрээ бүртгүүлэх (хүйс, нас, улс, арьсны өнгө).", "{p}register", "{p}register"),
+    "profile": ("👤", "2D дүр, мэдээллээ харах.", "{p}profile [@хэрэглэгч]", "{p}profile @Bat"),
+    "wear": ("👕", "Цүнхний хувцсыг өмсөх.", "{p}wear <ID>", "{p}wear nike_air"),
+    "undress": ("👕", "Хувцас тайлах.", "{p}undress <hat | top | bottom | shoes | acc | ID>", "{p}undress hat"),
+    "mine": ("⛏️", "Алт малтах (40% магадлал, 30 минут тутам).", "{p}mine", "{p}mine"),
+    "open": ("🎁", "Хайрцаг, кейс, сан нээх.", "{p}open <box | case | chest> [тоо]", "{p}open case 2"),
+    "revive": ("💖", "Revive Active ашиглан үхсэн хүнийг амилуулах.", "{p}revive [@хэрэглэгч]", "{p}revive @Bat"),
+    "marry": ("💍", "Гэр бүл болох санал тавих (бөгж хэрэгтэй).", "{p}marry <@хэрэглэгч>", "{p}marry @Bat"),
+    "divorce": ("💔", "Салах (100,000₮).", "{p}divorce", "{p}divorce"),
+    "couple": ("💞", "Гэр бүлийн мэдээлэл.", "{p}couple", "{p}couple"),
+    "date": ("🌹", "Ханьтайгаа болзох (30,000₮).", "{p}date", "{p}date"),
+    "giveaway": ("🎉", "Админ: татварын сангаас giveaway.", "{p}giveaway <дүн | pool> <10m | 2h | 1d> [ялагчийн тоо]", "{p}giveaway 500k 1h 2"),
+    "pool": ("🏛️", "Татварын сангийн үлдэгдэл.", "{p}pool", "{p}pool"),
+    "admin": ("🛠️", "Админы цэс ба командууд.", "{p}admin [give | take | set | item | revive | ...]", "{p}admin give @Bat 1m"),
+    "info": ("ℹ️", "Бот, сервер, статистик.", "{p}info", "{p}info"),
+    "addmoney": ("🛠️", "Bot Owner: хэрэглэгчид мөнгө нэмэх.", "{p}addmoney <@хэрэглэгч> <дүн>", "{p}addmoney @Bat 1m"),
+    "help": ("📖", "Командын тусламж.", "{p}help [апп]", "{p}help casino"),
 }
 
 EMOTE_USAGE = ("🎭", "Бусдад эможи үзүүлэх.", "{p}{name} <@хэрэглэгч>", "{p}{name} @Bat")
@@ -65,7 +60,7 @@ EMOTE_USAGE = ("🎭", "Бусдад эможи үзүүлэх.", "{p}{name} <@�
 
 def usage_embed(ctx, command) -> discord.Embed:
     p = ctx.clean_prefix
-    name = command.qualified_name if command else "help"
+    name = command.name if command else "help"
     info = USAGE.get(name)
     if info is None:
         emoji, desc, usage, example = EMOTE_USAGE

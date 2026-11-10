@@ -1,33 +1,24 @@
-# Mongol Economy Bot (Jungle City)
+# Mongol Economy Bot
 
-Python + discord.py + SQLite. Угтвар: `q` эсвэл `!` (том жижиг үсэг хамаагүй: `qwork`, `!work`, `! work`).
+Python + discord.py + SQLite. Угтвар: `q` эсвэл `!` (том жижиг үсэг хамаагүй).
 
 ## Суулгах
-1. `.env` файлд `DISCORD_TOKEN=...` (токеноо хэнд ч бүү үзүүл). `PREFIX=q,!`
-2. Discord Developer Portal → Bot → **Message Content Intent** асаана.
+1. `.env` файлд `DISCORD_TOKEN=...` (токеноо хэнд ч бүү үзүүл), `PREFIX=q,!`
+2. Discord Developer Portal → Bot → **Message Content Intent**, **Server Members Intent** асаана.
 3. `pip install -r requirements.txt`
 4. `py main.py` (Windows) эсвэл `python main.py`
 
-Хуучин `bot.db` байвал шинэ багана, хүснэгтүүд автоматаар нэмэгдэнэ.
+Хуучин `bot.db` шинэ баганууд руугаа автоматаар шилждэг. Хуучин тоглогчид эхний командаар дахин бүртгүүлнэ.
 
-## Командууд
-`qhelp` гэж бичвэл ◀ ▶ товч, ангилал сонгох цэстэй тусламж гарна.
-Үндсэн: bal, daily, dep, with, give, lb · Ажил: work, jobs, workout
-Дэлгүүр: shop, buy, inv, sell, gift, eat, petshop, buypet
-Байшин: house, safe · Гэмт хэрэг: steal, rob, hack, block, bail
-Казино (банкнаас): cf, dice, slots, mf, duel, draw · Эможи: slap, hug, kiss, pat ...
-
-## Шинэ боломжууд (v2)
-- **Бүртгэл**: character үүсгээгүй хүн `q<команд>` бичихэд бот ажиллахгүй, оронд нь **Хариулах** товч гарна. Асуулт: хүйс → нас (1-100) + улс → үсний өнгө. `qprofile` дээр 2D character зурагтай.
-- **Хувцас**: `qshop clothes` → `qbuy <ID>` → `qwear <ID>` (character дээр харагдана). **Гэрлэлт**: `qmarry @хүн` (Бөгж хэрэгтэй), `qdivorce`, `qdate`.
-- **Дэлгүүр 5 ангилал**: food, digital, home, house (машин), clothes.
-- **Татвар 10%**: `daily`, `work`-оос. Сан: `qtreasury`. **Giveaway**: `qgiveaway <дүн|all> <30m|2h|1d> [ялагч]` (Owner/Admin, сангаас).
-- **Өлсөлт**: 3 хоног хоолгүй бол 2 цаг тутам хэтэвчний 2.5% хасна; 7 хоног хоолгүй бол **үхнэ** → `Revive Active` (`qinv use revive`) эсвэл `qadmin revive`. Тоглоомоос 0.1% олдоно.
-- **Хайрцаг**: `qbox`, `qbox buy box|case|chest`, `qopen box|case|chest`. Box: 2% Revive Active, 10% азын хор, 10% мөнгөний хор. Case: Big Cash (RTP ~96%).
-- **Уурхай**: `qmine` (40% алт, 1.5 цаг). **Дасгалжуулагч**: `qcoach` (200,000₮ → хүч +3).
-- **Утас**: `qphone` / `qutas` (банк, эрүүл мэнд, татвар, сервер). `qinfo`, `qping`.
-- **Admin**: `qadmin` (слайд тайлбар) — give/take/set/item/remove/revive/kill/feed/jail/free/strength/cooldown/reset/treasury.
-- **+18 сэдэвтэй эможи**: `qflirt qtease qseduce qlovebite qsparkle` — зөвхөн NSFW сувагт, шууд бус (explicit биш).
-
-Тохируулга: `utils.py` (TAX_RATE, HUNGER_DAYS, DEAD_DAYS), `cogs/loot.py` (MINE_*, BOX_*, CASE_TIERS), `cogs/phone.py` (REQUIRE_PHONE).
-`pip install -r requirements.txt` дахин ажиллуулна (Pillow нэмэгдсэн).
+## Гол боломжууд
+- **Бүртгэл:** эхний командаар хүйс, нас, улс, арьсны өнгө сонгоно. Бүртгүүлэх хүртэл бот ажиллахгүй.
+- **Профайл:** `qprofile` 2D дүр, `qwear`, `qundress` (брэнд хувцас).
+- **Өлсөлт:** 3 хоног хоолгүй бол 2 цаг тутам хэтэвчний 2.5% хасагдана; 7 хоног хоолгүй бол үхнэ. `Revive Active` (хайрцгаас 2%, тоглоомоор 0.1%) амилуулна.
+- **Татвар:** `work`, `daily`-ийн 10% татварын санд орно. Админ `qgiveaway` хийнэ.
+- **Дэлгүүр:** food, digital, home, house (байшин+машин), clothes, jewel, metal, box, tool.
+- **Хайрцаг:** `qopen box|case|chest`, `qmine` (алт 40%), luck/money potion.
+- **Романс:** `qmarry`, `qdate`, `qcouple`, `qdivorce`.
+- **Утас:** `qhelp` / `qphone` / `qutas`.
+- **Админ:** `qadmin` (слайд цэс). Ботын эзэн `qadmin op @хүн`-ээр админ томилно.
+- **Казино:** cf, dice, slots, mf, duel, draw (банкнаас).
+- **Мэдээлэл:** `qinfo`.
